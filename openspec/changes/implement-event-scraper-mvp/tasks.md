@@ -1,13 +1,13 @@
 ## 1. 爬蟲模組 (Scraper Module)
 
-- [ ] 1.1 專案基礎設定與環境配置，建立 config.py 與 .env.example
-- [ ] 1.2 實作爬蟲基底類別 (BaseScraper)，支援 Playwright 異步啟動、自動滾動與本地快取
-- [ ] 1.3 實作平台適配爬蟲 (Accupass & Facebook)，繼承 BaseScraper 處理特定 DOM 結構
+- [x] 1.1 專案基礎設定與環境配置，建立 config.py 與 .env.example
+- [x] 1.2 實作爬蟲基底類別 (BaseScraper)，支援 Playwright 異步啟動、自動滾動與本地快取
+- [x] 1.3 實作平台適配爬蟲 (Accupass & Facebook)，繼承 BaseScraper 處理特定 DOM 結構
 
 ## 2. AI 處理模組 (AI Processor Module)
 
-- [ ] 2.1 定義 Event Schema 與 Pydantic 結構
-- [ ] 2.2 實作 Gemini 結構化萃取器，利用 response_schema 取得 JSON 格式活動
+- [x] 2.1 定義 Event Schema 與 Pydantic 結構
+- [x] 2.2 實作 Gemini 結構化萃取器，利用 response_schema 取得 JSON 格式活動
 
 ## 3. 配對與去重模組 (Matcher Module)
 
