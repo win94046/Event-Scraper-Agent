@@ -11,13 +11,13 @@
 
 ## 3. 配對與去重模組 (Matcher Module)
 
-- [ ] 3.1 實作關鍵字配對器，過濾使用者訂閱活動
-- [ ] 3.2 實作去重過濾器，透過 sent_events.json 排除重複發信
+- [x] 3.1 實作關鍵字配對器，過濾使用者訂閱活動
+- [x] 3.2 實作去重過濾器，透過 sent_events.json 排除重複發信
 
 ## 4. 通知模組 (Notifier Module)
 
-- [ ] 4.1 設計卡片式 HTML 郵件模板
-- [ ] 4.2 實作 SMTP 郵件發送器，透過 Gmail SMTP 安全傳送郵件
+- [x] 4.1 設計卡片式 HTML 郵件模板
+- [x] 4.2 實作 SMTP 郵件發送器，透過 Gmail SMTP 安全傳送郵件
 
 ## 5. 系統日誌與可觀測性強化 (Logging & Observability)
 
