@@ -1,7 +1,11 @@
 import os
 import hashlib
+import logging
 from abc import ABC, abstractmethod
 import config
+
+# 初始化此模組專屬的 Logger
+logger = logging.getLogger("BaseScraper")
 
 class BaseScraper(ABC):
     """
@@ -28,15 +32,15 @@ class BaseScraper(ABC):
         if config.USE_CACHE:
             cache_path = self._get_cache_path(url)
             if os.path.exists(cache_path):
-                print(f"[BaseScraper] 快取命中 (Cache Hit): {url}")
+                logger.info(f"快取命中 (Cache Hit): {url}")
                 try:
                     with open(cache_path, "r", encoding="utf-8") as f:
-                        return self.preprocess_content(f.read())
+                        return f.read()
                 except Exception as e:
-                    print(f"[BaseScraper] 讀取快取檔案失敗: {e}，改為線上抓取")
+                    logger.warning(f"讀取快取檔案失敗: {e}，改為線上抓取")
 
-        print(f"[BaseScraper] 快取未命中 (Cache Miss)，啟動線上爬取: {url}")
-        content = self.preprocess_content(await self._scrape(url))
+        logger.info(f"快取未命中 (Cache Miss)，啟動線上爬取: {url}")
+        content = await self._scrape(url)
 
         # 爬取成功後，若有內容且開啟快取，則寫入本地
         if config.USE_CACHE and content:
@@ -44,13 +48,10 @@ class BaseScraper(ABC):
             try:
                 with open(cache_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                print(f"[BaseScraper] 成功將網頁內容存入快取: {cache_path}")
+                logger.info(f"成功將網頁內容存入快取: {cache_path}")
             except Exception as e:
-                print(f"[BaseScraper] 寫入快取檔案失敗: {e}")
+                logger.error(f"寫入快取檔案失敗: {e}")
 
-        return content
-
-    def preprocess_content(self, content: str) -> str:
         return content
 
     @abstractmethod
@@ -76,14 +77,14 @@ class BaseScraper(ABC):
         target_selector: 用於計數的目標元素 CSS 選擇器。若網頁上該元素數量達到 max_elements，則停止滾動。
         max_elements: 目標元素數量的上限門檻
         """
-        print(f"[BaseScraper] 啟動自動捲動頁面 (最大捲動 {max_scrolls} 次，目標數量限制 {max_elements} 個)...")
+        logger.info(f"啟動自動捲動頁面 (最大捲動 {max_scrolls} 次，目標數量限制 {max_elements} 個)...")
         for i in range(max_scrolls):
             # 檢查目前目標元素的數量
             if target_selector:
                 element_count = await page.locator(target_selector).count()
-                print(f"[BaseScraper] 目前偵測到目標元素數量: {element_count} / {max_elements}")
+                logger.debug(f"目前偵測到目標元素數量: {element_count} / {max_elements}")
                 if element_count >= max_elements:
-                    print(f"[BaseScraper] 目標元素數量已達上限 ({element_count} >= {max_elements})，提早停止滾動")
+                    logger.info(f"目標元素數量已達上限 ({element_count} >= {max_elements})，提早停止滾動")
                     break
 
             # 取得目前網頁總高度
@@ -96,6 +97,6 @@ class BaseScraper(ABC):
             new_height = await page.evaluate("document.body.scrollHeight")
             # 若高度無變化，代表已無新內容載入，提早退出
             if new_height == last_height:
-                print(f"[BaseScraper] 頁面已觸底，於第 {i+1} 次滾動停止")
+                logger.info(f"頁面已觸底，於第 {i+1} 次滾動停止")
                 break
-        print("[BaseScraper] 自動捲動結束")
+        logger.info("自動捲動結束")

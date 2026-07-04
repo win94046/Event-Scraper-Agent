@@ -6,3 +6,4 @@ __pycache__/
 cache/
 sent_events.json
 debug.log
+logs/

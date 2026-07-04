@@ -18,3 +18,9 @@
 
 - [ ] 4.1 設計卡片式 HTML 郵件模板
 - [ ] 4.2 實作 SMTP 郵件發送器，透過 Gmail SMTP 安全傳送郵件
+
+## 5. 系統日誌與可觀測性強化 (Logging & Observability)
+
+- [x] 5.1 實作日誌模組初始化，配置同時輸出至 stdout 與 logs/event_scraper.log (RotatingFileHandler)
+- [x] 5.2 在已完成的 Scraper 與 AI 模組中導入日誌，記錄快取命中、等待超時及 API 失敗重試
+- [x] 5.3 在 main.py 及後續 Matcher/Notifier 模組中整合日誌，確保關鍵錯誤能輸出 Traceback 堆疊日誌

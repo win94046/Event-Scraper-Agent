@@ -1,8 +1,12 @@
+import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 import config
+
+# 初始化此模組專屬的 Logger
+logger = logging.getLogger("EventExtractor")
 
 # ==========================================
 # 定義 Pydantic 結構 (Structured Outputs)
@@ -62,7 +66,7 @@ class EventExtractor:
     def __init__(self):
         # 檢查 API Key 是否存在且非預設佔位符
         if not config.GEMINI_API_KEY or config.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-            print("[EventExtractor] 警告：未設定有效的 GEMINI_API_KEY。請先在根目錄的 .env 檔案中填入真實的金鑰。")
+            logger.warning("未設定有效的 GEMINI_API_KEY。請先在根目錄的 .env 檔案中填入真實的金鑰。")
             self.client = None
         else:
             # 初始化 Gemini API 用戶端
@@ -74,17 +78,17 @@ class EventExtractor:
         內建自動退避重試 (Backoff Retry) 與異常捕獲機制。
         """
         if not self.client:
-            print("[EventExtractor] 由於 GEMINI_API_KEY 未正確設定，已跳過 AI 萃取流程，回傳空列表。")
+            logger.warning("由於 GEMINI_API_KEY 未正確設定，已跳過 AI 萃取流程，回傳空列表。")
             return []
 
         if not raw_text or not raw_text.strip():
-            print("[EventExtractor] 傳入的文字內容為空，跳過處理。")
+            logger.info("傳入的文字內容為空，跳過處理。")
             return []
 
         # 防呆機制：限制文字長度 (例如 25000 字元) 避免超出 Token 限制
         max_chars = 25000
         if len(raw_text) > max_chars:
-            print(f"[EventExtractor] 偵測到文字長度過長 ({len(raw_text)} 字元)，將自動截斷至前 {max_chars} 字元")
+            logger.warning(f"偵測到文字長度過長 ({len(raw_text)} 字元)，將自動截斷至前 {max_chars} 字元")
             raw_text = raw_text[:max_chars]
 
         # 組合 System Prompt 與使用者輸入
@@ -105,7 +109,7 @@ class EventExtractor:
 
         for attempt in range(max_retries):
             try:
-                print(f"[EventExtractor] 正在傳送請求至 Gemini API (第 {attempt + 1} 次嘗試)...")
+                logger.info(f"正在傳送請求至 Gemini API (第 {attempt + 1} 次嘗試)...")
                 # 異步呼叫 Gemini API
                 response = await self.client.aio.models.generate_content(
                     model='gemini-2.5-flash',
@@ -127,19 +131,19 @@ class EventExtractor:
                     if item.get("is_event") and item.get("event_title"):
                         extracted_list.append(item)
 
-                print(f"[EventExtractor] 萃取完成！成功從中提取出 {len(extracted_list)} 個有效活動。")
+                logger.info(f"萃取完成！成功從中提取出 {len(extracted_list)} 個有效活動。")
                 return extracted_list
 
             except Exception as e:
                 # 遇到錯誤，計算等待時間進行重試
                 wait_time = backoff_factor ** attempt
-                print(f"[EventExtractor] 呼叫 Gemini API 發生異常: {e}")
+                logger.warning(f"呼叫 Gemini API 發生異常: {e}")
                 
                 if attempt < max_retries - 1:
-                    print(f"[EventExtractor] 將於 {wait_time} 秒後進行第 {attempt + 2} 次重試...")
+                    logger.info(f"將於 {wait_time} 秒後進行第 {attempt + 2} 次重試...")
                     await asyncio.sleep(wait_time)
                 else:
-                    print("[EventExtractor] 已達最大重試次數，宣告失敗，回傳空列表。")
+                    logger.error("已達最大重試次數，宣告失敗，回傳空列表。")
                     return []
         
         return []

@@ -28,3 +28,10 @@ The system SHALL match extracted events with user keywords. The system SHALL fil
 #### Scenario: Match and Deduplicate Email Sending
 - **WHEN** a user is subscribed to specific keywords and a new matching event is extracted (and not found in sent_events.json)
 - **THEN** the system SHALL send a custom HTML email to the user's email, and update `sent_events.json` with the event's URL hash
+
+### Requirement: Logging and Traceability
+The system SHALL configure a standard logging mechanism. The system SHALL log all critical events, system progress, warnings, and errors. The logs SHALL be outputted to the standard output and saved to a local rolling file. The system SHALL log detailed exception stack traces on critical failures (such as SMTP connection failure or LLM API error) to allow troubleshooting.
+
+#### Scenario: Exception Logged on Failure
+- **WHEN** a critical system error occurs during the execution of any module (Scraper, LLM, or SMTP)
+- **THEN** the system SHALL capture the exception and write the error message along with the detailed traceback stack to the local log file

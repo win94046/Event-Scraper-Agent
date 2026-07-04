@@ -11,6 +11,7 @@
 - 實作具備去重機制的關鍵字比對 Matcher。
 - 實作以卡片式 HTML 發送的通知模組。
 - 提供 CLI 參數（`--dry-run`、`--test-email`、`--platform`）以便於開發調試與獨立測試。
+- 建立完整的 Logging 系統，同時輸出日誌至終端機並保存於本地檔案，以提升生產環境的可維護性。
 
 **Non-Goals:**
 - 不建立 Web 使用者介面（UI）或前端網站。
@@ -34,6 +35,10 @@
 ### 4. 檔案系統去重儲存 (JSON-based History)
 - **選擇**：將已寄送的活動網址 SHA256 雜湊值記錄在 `sent_events.json` 中。
 - **原因**：這是一個輕量批次腳本，使用本地 JSON 儲存歷史記錄即可滿足 MVP 對去重的要求，無需配置繁重的 SQL 資料庫。
+
+### 5. 專案日誌系統 (Logging Design)
+- **選擇**：使用 Python 內建的 `logging` 模組。日誌將同時輸出至 Console（標準輸出 stdout）以及保存至本地檔案 `logs/event_scraper.log`。使用 `RotatingFileHandler` 進行日誌檔案輪轉（限制單檔 5MB，最多保留 5 個歷史日誌檔案）。
+- **原因**：檔案日誌利於背景排程（如 cron 或 Windows 任務排程器）執行時追溯問題。透過明確的分級日誌（DEBUG, INFO, WARNING, ERROR, CRITICAL），能讓使用者在產品出錯時（如郵件寄送失敗、API 欠費、爬蟲超時）迅速找出根本原因。
 
 ## Risks / Trade-offs
 
