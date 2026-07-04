@@ -1,0 +1,20 @@
+## 1. 爬蟲模組 (Scraper Module)
+
+- [ ] 1.1 專案基礎設定與環境配置，建立 config.py 與 .env.example
+- [ ] 1.2 實作爬蟲基底類別 (BaseScraper)，支援 Playwright 異步啟動、自動滾動與本地快取
+- [ ] 1.3 實作平台適配爬蟲 (Accupass & Facebook)，繼承 BaseScraper 處理特定 DOM 結構
+
+## 2. AI 處理模組 (AI Processor Module)
+
+- [ ] 2.1 定義 Event Schema 與 Pydantic 結構
+- [ ] 2.2 實作 Gemini 結構化萃取器，利用 response_schema 取得 JSON 格式活動
+
+## 3. 配對與去重模組 (Matcher Module)
+
+- [ ] 3.1 實作關鍵字配對器，過濾使用者訂閱活動
+- [ ] 3.2 實作去重過濾器，透過 sent_events.json 排除重複發信
+
+## 4. 通知模組 (Notifier Module)
+
+- [ ] 4.1 設計卡片式 HTML 郵件模板
+- [ ] 4.2 實作 SMTP 郵件發送器，透過 Gmail SMTP 安全傳送郵件
