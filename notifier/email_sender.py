@@ -13,15 +13,15 @@ class EmailSender:
     負責組裝 HTML 郵件模板，並透過 SMTP 發送活動通知信的模組。
     """
     def __init__(self):
-        # 讀取並驗證 SMTP 配置
+        # 讀取並驗證 SMTP 配置，將屬性對齊 config.py 定義之變數
         self.server = config.SMTP_SERVER
         self.port = config.SMTP_PORT
-        self.user = config.SMTP_USER
-        self.password = config.SMTP_PASSWORD
-        self.sender_email = config.SMTP_USER # 預設以登入帳號作為發信人
+        self.user = config.SENDER_EMAIL       # 載入寄件者 Email 作為登入帳號
+        self.password = config.SENDER_PASSWORD # 載入應用程式密碼
+        self.sender_email = config.SENDER_EMAIL # 預設以登入帳號作為發信人
 
-        # 檢測 SMTP 配置是否齊備，若無，給予警告
-        if not all([self.server, self.port, self.user, self.password]) or self.password == "YOUR_SMTP_PASSWORD_HERE":
+        # 檢測 SMTP 配置是否齊備，若是預設提示值或空值，給予警告並停用實體發信功能
+        if not all([self.server, self.port, self.user, self.password]) or self.password == "your_gmail_app_password_here":
             logger.warning("未偵測到完整的 SMTP 發信設定。請在根目錄的 .env 檔案中配置 SMTP 金鑰，否則無法實體發信。")
             self.is_configured = False
         else:

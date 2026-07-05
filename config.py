@@ -43,7 +43,7 @@ SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 USERS = [
     {
         "user_id": "u001",
-        "email": "user1@example.com", # 發送通知信的對象 Email
+        "email": os.getenv("RECIPIENT_EMAIL", os.getenv("SENDER_EMAIL", "user1@example.com")), # 發送通知信的對象 Email
         "keywords": ["讀書會", "AI", "Python", "研討會", "Agent"], # 訂閱的關鍵字
         "platforms": ["accupass", "facebook"] # 訂閱的爬取平台
     }
