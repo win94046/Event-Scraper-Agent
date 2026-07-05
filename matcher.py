@@ -2,20 +2,55 @@ import os
 import json
 import hashlib
 import logging
+import urllib.parse
 from typing import List, Set, Dict
 import config
 
 # 初始化此模組的 Logger
 logger = logging.getLogger("Matcher")
 
+def normalize_url(url: str) -> str:
+    """
+    正規化 URL，移除常見的社群與廣告追蹤參數（例如 fbclid, utm_* 等）。
+    於 DEBUG 級別記錄 URL 淨化前後的對比。
+    """
+    if not url:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        # 解析 query 參數
+        query_params = urllib.parse.parse_qsl(parsed.query)
+        # 過濾黑名單參數 (不區分大小寫)
+        blacklisted_params = {"fbclid", "gclid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
+        cleaned_params = [(k, v) for k, v in query_params if k.lower() not in blacklisted_params]
+        
+        # 重新組裝 query
+        new_query = urllib.parse.urlencode(cleaned_params)
+        # 重新組裝 URL
+        normalized = urllib.parse.ParseResult(
+            scheme=parsed.scheme,
+            netloc=parsed.netloc,
+            path=parsed.path,
+            params=parsed.params,
+            query=new_query,
+            fragment=parsed.fragment
+        ).geturl()
+        
+        logger.debug(f"[URL Normalizer] 原始: {url} -> 淨化後: {normalized}")
+        return normalized
+    except Exception as e:
+        logger.warning(f"正規化網址 {url} 失敗: {e}，回退使用原始網址")
+        return url
+
 def get_event_hash(event: Dict) -> str:
     """
     為單一活動計算唯一的 SHA-256 識別碼。
-    優先使用活動報名 URL 作為識別依據；若 URL 為空，則使用活動標題加上活動日期作為識別。
+    優先使用經過正規化後的活動報名 URL 作為識別依據；若 URL 為空，則使用活動標題與日期作為識別。
     """
     source_url = event.get("source_url")
     if source_url and source_url.strip():
-        unique_str = source_url.strip()
+        # 計算 Hash 前先進行 URL 正規化以去除廣告追蹤參數
+        unique_str = normalize_url(source_url.strip())
     else:
         # 當無 URL 時，以 標題_時間 組合進行雜湊
         event_title = event.get("event_title") or ""

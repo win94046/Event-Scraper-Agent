@@ -1,4 +1,5 @@
 import os
+import time
 import hashlib
 import logging
 from abc import ABC, abstractmethod
@@ -27,17 +28,24 @@ class BaseScraper(ABC):
     async def fetch_content(self, url: str) -> str:
         """
         核心爬取進入點。
-        若快取啟用且快取檔案存在，則直接讀取快取；否則線上爬取並寫入快取。
+        若快取啟用且快取檔案在 TTL 內有效，則直接讀取快取；否則線上爬取並更新快取。
         """
         if config.USE_CACHE:
             cache_path = self._get_cache_path(url)
             if os.path.exists(cache_path):
-                logger.info(f"快取命中 (Cache Hit): {url}")
                 try:
-                    with open(cache_path, "r", encoding="utf-8") as f:
-                        return f.read()
+                    # 取得快取檔案的最後修改時間並計算其存活時數
+                    mtime = os.path.getmtime(cache_path)
+                    cache_age_hours = (time.time() - mtime) / 3600
+                    
+                    if cache_age_hours < config.CACHE_TTL_HOURS:
+                        logger.info(f"快取命中 (Cache Hit - 已存活 {cache_age_hours:.2f} 小時，限制上限 {config.CACHE_TTL_HOURS} 小時): {url}")
+                        with open(cache_path, "r", encoding="utf-8") as f:
+                            return f.read()
+                    else:
+                        logger.info(f"快取已過期 (Cache Expired - 已存活 {cache_age_hours:.2f} 小時，大於限制上限 {config.CACHE_TTL_HOURS} 小時): {url}")
                 except Exception as e:
-                    logger.warning(f"讀取快取檔案失敗: {e}，改為線上抓取")
+                    logger.warning(f"檢測或讀取快取檔案失敗: {e}，將改為線上抓取")
 
         logger.info(f"快取未命中 (Cache Miss)，啟動線上爬取: {url}")
         content = await self._scrape(url)

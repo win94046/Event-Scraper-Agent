@@ -1,4 +1,5 @@
 import logging
+import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from google import genai
@@ -72,10 +73,10 @@ class EventExtractor:
             # 初始化 Gemini API 用戶端
             self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
-    async def extract_events(self, raw_text: str) -> List[dict]:
+    async def extract_events(self, raw_text: str, current_time: Optional[str] = None) -> List[dict]:
         """
         接收 Raw Text 原始文字，限制文字長度，呼叫 Gemini API 進行結構化萃取。
-        內建自動退避重試 (Backoff Retry) 與異常捕獲機制。
+        支援傳入基準時間以推算相對時間，內建自動退避重試與異常捕獲機制。
         """
         if not self.client:
             logger.warning("由於 GEMINI_API_KEY 未正確設定，已跳過 AI 萃取流程，回傳空列表。")
@@ -91,12 +92,18 @@ class EventExtractor:
             logger.warning(f"偵測到文字長度過長 ({len(raw_text)} 字元)，將自動截斷至前 {max_chars} 字元")
             raw_text = raw_text[:max_chars]
 
+        # 取得基準時間，用於 LLM 推算 Google 摘要中的相對時間
+        ref_time = current_time if current_time else datetime.datetime.now().astimezone().isoformat()
+
         # 組合 System Prompt 與使用者輸入
         system_instruction = (
-            "你是一個專業的活動資訊整理助理。你的任務是分析傳入的非結構化網頁文字內容（生肉資料），"
-            "過濾掉無關的個人閒聊、廣告或非活動宣傳貼文。將所有屬於『研討會、讀書會、課程、論壇、分享會、技術沙龍』的活動資訊"
-            "精確地萃取出來，並完全符合規定的 JSON 格式。"
-            "如果貼文中有提及多個活動，請全部提取。如果完全沒有任何活動，請回傳空的 events 列表。"
+            "你是一個專業的技術活動資訊整理助理。你的任務是分析傳入的網頁文字或 Google 搜尋結果列表（帶有 [Title]、[Link]、[Snippet] 標記）。\n"
+            "過濾無關個人閒聊與廣告，精確萃取所有屬於『研討會、讀書會、課程、論壇、分享會、技術沙龍、Workshop』的活動。\n\n"
+            "【處理規範】\n"
+            f"1. **基準時間**：目前爬取時間為 {ref_time}。如果文本中包含相對時間（例如 '3天前'、'下週二'、'7月'、'今天'），請務必以此基準時間推算，將其轉換為 ISO 8601 絕對時間格式（例如：2026-07-20T19:00:00+08:00）。如果年份未說明，請以基準時間的年份為準。\n"
+            "2. **Google SERP 解析**：若是 Google 搜尋結果，請仔細分析 [Snippet] 中的文字。活動的標題優先參考 [Title]，報名/來源連結優先提取 [Link]。\n"
+            "3. **欄位精準度**：若 [Snippet] 指明有多個活動，請拆分輸出。若內容不足以判定為活動（例如只是討論文章或問答），請將 is_event 設為 false。\n"
+            "請將萃取出的活動以規定的 JSON 格式輸出。"
         )
 
         prompt = f"請分析以下網頁文字內容，並從中萃取出所有活動：\n\n--- 網頁內容開始 ---\n{raw_text}\n--- 網頁內容結束 ---"

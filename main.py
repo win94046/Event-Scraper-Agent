@@ -9,10 +9,12 @@ import logging
 import logger
 import matcher
 from scraper.accupass_scraper import AccupassScraper
-from scraper.facebook_scraper import FacebookScraper
+from scraper.facebook_scraper import FacebookScraper, GoogleBlockException
 from ai_processor.extractor import EventExtractor
 from notifier.email_sender import EmailSender
 import config
+import urllib.parse
+import random
 
 # 強制終端機以 UTF-8 編碼輸出，防止 Windows CP950 無法解析 Emoji 🔥 導致崩潰
 if hasattr(sys.stdout, 'reconfigure'):
@@ -88,55 +90,70 @@ async def main():
 
         # 情境一：使用者指定單獨測試某平台
         if args.platform:
-            url = target_urls.get(args.platform)
+            if args.platform.lower() == "facebook":
+                # 改為 Google Dorking 搜尋，讀取預設使用者的 keywords
+                test_user = config.USERS[0]
+                keywords = test_user["keywords"]
+                # 限制一組 query 做單一測試
+                kw_or = " OR ".join(f'"{kw}"' for kw in keywords[:4])
+                dork_query = f'site:facebook.com ({kw_or}) ("研討會" OR "讀書會" OR "講座" OR "活動" OR "workshop" OR "seminar") "台北"'
+                encoded_query = urllib.parse.quote(dork_query)
+                url = f"https://www.google.com/search?q={encoded_query}&tbs={config.GOOGLE_SEARCH_TIME_LIMIT}"
+                log.info(f"單一平台測試：組裝 Google Dorking 搜尋 URL: {url}")
+            else:
+                url = target_urls.get(args.platform)
+                
             log.info(f"開始單一平台測試: {args.platform} -> {url}")
             
-            # 1. 爬取原始文字 (具備快取功能)
-            raw_text = await run_scraper(args.platform, url)
-            log.info(f"成功擷取到 {len(raw_text)} 個字元的原始文字內容")
-            
-            # 2. 呼叫 LLM 進行活動萃取
-            log.info("開始呼叫 AI 模組進行活動分析...")
-            events = await extractor.extract_events(raw_text)
-            
-            # 3. 執行去重過濾 (Matcher)
-            log.info("開始進行去重歷史過濾 (De-duplication)...")
-            unique_events = matcher.filter_duplicates(events, sent_history)
-
-            # 4. 對預設的使用者關鍵字進行興趣比對 (以 config 中的第一個使用者 u001 為例)
-            test_user = config.USERS[0]
-            log.info(f"正在針對測試使用者 {test_user['user_id']} 的訂閱關鍵字 {test_user['keywords']} 進行興趣配對...")
-            matched_events = matcher.match_user_interests(unique_events, test_user["keywords"])
-
-            # 5. 印出最終分析與配對結果
-            log.info(f"【單一平台測試報告】:")
-            log.info(f"  - LLM 原始萃取數: {len(events)} 個")
-            log.info(f"  - 排除已寄送重複: {len(events) - len(unique_events)} 個")
-            log.info(f"  - 使用者關鍵字命中: {len(matched_events)} 個")
-            log.debug(json.dumps(matched_events, indent=2, ensure_ascii=False))
-
-            # 6. 存入本地 JSON 檔案
-            output_path = os.path.join(config.CACHE_DIR, "extracted_events.json")
             try:
-                with open(output_path, "w", encoding="utf-8") as f:
-                    json.dump(matched_events, f, indent=2, ensure_ascii=False)
-                log.info(f"已成功將最終配對後的活動存檔至: {output_path}")
-            except Exception as save_err:
-                log.error(f"存檔失敗: {save_err}")
+                # 1. 爬取原始文字 (具備快取功能與 Google 熔斷拋錯)
+                raw_text = await run_scraper(args.platform, url)
+                log.info(f"成功擷取到 {len(raw_text)} 個字元的原始文字內容")
                 
-            # 若不是 dry-run，模擬進行通知寄送與歷史寫入
-            if not args.dry_run and matched_events:
-                log.info(f"非 Dry-run 模式，開始向測試使用者 {test_user['email']} 傳送通知郵件...")
-                send_success = await notifier.send_notification(test_user["email"], matched_events)
+                # 2. 呼叫 LLM 進行活動萃取
+                log.info("開始呼叫 AI 模組進行活動分析...")
+                events = await extractor.extract_events(raw_text)
                 
-                if send_success:
-                    log.info("郵件發送成功，將本次活動寫入去重歷史記錄...")
-                    for evt in matched_events:
-                        evt_hash = matcher.get_event_hash(evt)
-                        sent_history.add(evt_hash)
-                    matcher.save_sent_history(sent_history)
-                else:
-                    log.warning("郵件發送失敗，本次活動暫不寫入歷史，下次運行時將會重新發送。")
+                # 3. 執行去重過濾 (Matcher)
+                log.info("開始進行去重歷史過濾 (De-duplication)...")
+                unique_events = matcher.filter_duplicates(events, sent_history)
+
+                # 4. 對預設的使用者關鍵字進行興趣比對 (以 config 中的第一個使用者 u001 為例)
+                test_user = config.USERS[0]
+                log.info(f"正在針對測試使用者 {test_user['user_id']} 的訂閱關鍵字 {test_user['keywords']} 進行興趣配對...")
+                matched_events = matcher.match_user_interests(unique_events, test_user["keywords"])
+
+                # 5. 印出最終分析與配對結果
+                log.info(f"【單一平台測試報告】:")
+                log.info(f"  - LLM 原始萃取數: {len(events)} 個")
+                log.info(f"  - 排除已寄送重複: {len(events) - len(unique_events)} 個")
+                log.info(f"  - 使用者關鍵字命中: {len(matched_events)} 個")
+                log.debug(json.dumps(matched_events, indent=2, ensure_ascii=False))
+
+                # 6. 存入本地 JSON 檔案
+                output_path = os.path.join(config.CACHE_DIR, "extracted_events.json")
+                try:
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        json.dump(matched_events, f, indent=2, ensure_ascii=False)
+                    log.info(f"已成功將最終配對後的活動存檔至: {output_path}")
+                except Exception as save_err:
+                    log.error(f"存檔失敗: {save_err}")
+                    
+                # 若不是 dry-run，模擬進行通知寄送與歷史寫入
+                if not args.dry_run and matched_events:
+                    log.info(f"非 Dry-run 模式，開始向測試使用者 {test_user['email']} 傳送通知郵件...")
+                    send_success = await notifier.send_notification(test_user["email"], matched_events)
+                    
+                    if send_success:
+                        log.info("郵件發送成功，將本次活動寫入去重歷史記錄...")
+                        for evt in matched_events:
+                            evt_hash = matcher.get_event_hash(evt)
+                            sent_history.add(evt_hash)
+                        matcher.save_sent_history(sent_history)
+                    else:
+                        log.warning("郵件發送失敗，本次活動暫不寫入歷史，下次運行時將會重新發送。")
+            except GoogleBlockException as block_err:
+                log.critical(f"[熔斷 Circuit Breaker] 測試期間遭遇 Google 阻擋封鎖！錯誤資訊: {block_err}")
             return
 
         # 情境二：完整 Pipeline
@@ -147,14 +164,49 @@ async def main():
             
             # 爬取使用者訂閱的所有平台
             for platform in user["platforms"]:
-                url = target_urls.get(platform)
-                if url:
-                    log.info(f"正在爬取 {platform} -> {url}")
-                    raw_text = await run_scraper(platform, url)
-                    
+                try:
+                    if platform.lower() == "facebook":
+                        log.info(f"開始為使用者 {user['user_id']} 進行 Facebook Google Dorking 檢索...")
+                        keywords = user["keywords"]
+                        
+                        # 限制最多跑 3 組 query，每組最多 4 個關鍵字用 OR 串聯，避免頻繁請求
+                        chunk_size = 4
+                        kw_chunks = [keywords[i:i + chunk_size] for i in range(0, len(keywords), chunk_size)]
+                        kw_chunks = kw_chunks[:3] # 上限 3 組
+                        
+                        log.info(f"關鍵字分組完畢，預計執行 {len(kw_chunks)} 組 Google 搜尋 (最大上限 3 組)")
+                        
+                        facebook_raw_texts = []
+                        for idx, chunk in enumerate(kw_chunks):
+                            kw_or = " OR ".join(f'"{kw}"' for kw in chunk)
+                            dork_query = f'site:facebook.com ({kw_or}) ("研討會" OR "讀書會" OR "講座" OR "活動" OR "workshop" OR "seminar") "台北"'
+                            encoded_query = urllib.parse.quote(dork_query)
+                            google_url = f"https://www.google.com/search?q={encoded_query}&tbs={config.GOOGLE_SEARCH_TIME_LIMIT}"
+                            
+                            log.info(f"第 {idx+1}/{len(kw_chunks)} 組 Google 搜尋 - Query: {dork_query}")
+                            raw_text = await run_scraper(platform, google_url)
+                            if raw_text:
+                                facebook_raw_texts.append(raw_text)
+                            
+                            # 搜尋之間隨機延遲 (1s ~ 2s)，以防被 Google 連續請求判定為機器人
+                            if idx < len(kw_chunks) - 1:
+                                sleep_time = random.uniform(1.0, 2.0)
+                                await asyncio.sleep(sleep_time)
+                                
+                        raw_text = "\n\n".join(facebook_raw_texts)
+                    else:
+                        url = target_urls.get(platform)
+                        if not url:
+                            continue
+                        log.info(f"正在爬取 {platform} -> {url}")
+                        raw_text = await run_scraper(platform, url)
+                        
                     # 萃取活動
                     events = await extractor.extract_events(raw_text)
                     all_extracted_events.extend(events)
+                except GoogleBlockException as block_err:
+                    log.critical(f"[熔斷 Circuit Breaker] 偵測到 Google 阻擋，立即中斷此使用者後續所有搜尋。錯誤資訊: {block_err}")
+                    break
             
             log.info(f"使用者 {user['user_id']} 爬取與 AI 萃取結束，共取得 {len(all_extracted_events)} 個原始活動")
             
